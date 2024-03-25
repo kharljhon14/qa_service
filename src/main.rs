@@ -1,6 +1,9 @@
 use serde::Serialize;
 use std::str::FromStr;
-use warp::{http::StatusCode, reject::Reject, Filter, Rejection, Reply};
+use warp::{
+    filters::cors::CorsForbidden, http::Method, http::StatusCode, reject::Reject, Filter,
+    Rejection, Reply,
+};
 
 #[derive(Debug, Serialize)]
 struct QuestionId(String);
@@ -39,7 +42,7 @@ impl Question {
 
 async fn get_questions() -> Result<impl Reply, Rejection> {
     let question = Question::new(
-        QuestionId::from_str("0").expect("No id provided"),
+        QuestionId::from_str("1").expect("No id provided"),
         "First Question".to_string(),
         "Content of the question".to_string(),
         Some(vec!["Faq".to_string()]),
@@ -52,14 +55,19 @@ async fn get_questions() -> Result<impl Reply, Rejection> {
 }
 
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
-    if let Some(_invalid_id) = r.find::<QuestionId>() {
+    if let Some(error) = r.find::<CorsForbidden>() {
         Ok(warp::reply::with_status(
-            "No valid Id presented",
+            error.to_string(),
+            StatusCode::FORBIDDEN,
+        ))
+    } else if let Some(InvalidId) = r.find() {
+        Ok(warp::reply::with_status(
+            "No valid Id presented".to_string(),
             StatusCode::UNPROCESSABLE_ENTITY,
         ))
     } else {
         Ok(warp::reply::with_status(
-            "Route not found",
+            "Route not found".to_string(),
             StatusCode::NOT_FOUND,
         ))
     }
@@ -67,14 +75,20 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
 
 #[tokio::main]
 async fn main() {
+    let cors = warp::cors()
+        .allow_any_origin()
+        .allow_header("content-type")
+        .allow_methods(&[Method::PUT, Method::DELETE, Method::GET, Method::POST]);
+
     // Create a path Filter
     let get_items = warp::get()
-        .and(warp::path("questions").and(warp::path::end()))
+        .and(warp::path("questions"))
+        .and(warp::path::end())
         .and_then(get_questions)
         .recover(return_error);
 
-    let routes = get_items;
+    let routes = get_items.with(cors);
 
     // Start Server adn pass the route filter to it
-    warp::serve(routes).run(([127, 0, 0, 1], 3000)).await;
+    warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
 }
