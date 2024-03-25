@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::io::{Error, ErrorKind};
 use std::str::FromStr;
 use warp::{
     filters::cors::CorsForbidden, http::Method, http::StatusCode, reject::Reject, Filter,
@@ -9,10 +10,13 @@ use warp::{
 struct QuestionId(String);
 
 impl FromStr for QuestionId {
-    type Err = ();
+    type Err = std::io::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(QuestionId(s.to_string()))
+    fn from_str(id: &str) -> Result<Self, Self::Err> {
+        match id.is_empty() {
+            false => Ok(QuestionId(id.to_string())),
+            true => Err(Error::new(ErrorKind::InvalidInput, "No id provided")),
+        }
     }
 }
 
